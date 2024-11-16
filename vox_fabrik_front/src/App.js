@@ -12,8 +12,8 @@ function App() {
 
   return (
     <div>
-      <h1>React and Flask App</h1>
-      <p>{data ? data : 'Loading data...'}</p>
+      <h1>FoxVabrik</h1>
+      <p>{data ? data : 'Backend is not running...'}</p>
     </div>
   );
 }

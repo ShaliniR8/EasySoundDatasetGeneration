@@ -6,6 +6,7 @@ reinforce.txt
 test_*
 vox_fabrik.py
 notes.txt
+vox_fabrik.spec
 **/node_modules/*
 **/package-lock.json
 **/.pnp
