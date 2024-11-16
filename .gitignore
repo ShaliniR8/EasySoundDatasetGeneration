@@ -2,6 +2,8 @@ env/*
 dataspeech/*
 parler-tts/*
 reinforce/
+extracted_files/*
+python_helpers/*
 reinforce.txt
 test_*
 vox_fabrik.py
@@ -22,4 +24,4 @@ script.sh
 **/npm-debug.log*
 **/yarn-debug.log*
 **/yarn-error.log*
-**/uploads
+**/uploads/*
