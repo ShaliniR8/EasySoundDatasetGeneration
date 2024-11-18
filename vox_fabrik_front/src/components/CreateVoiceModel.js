@@ -4,6 +4,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import axios from 'axios';
 import styled from '@emotion/styled';
 
+const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
 const VisuallyHiddenInput = styled('input')({
   display: 'none',
 });
@@ -42,22 +43,20 @@ const CreateVoiceModel = () => {
     setError(null);
     setSuccess(false);
 
-    const files = event.target.files;
+    const files = event.target.files; // This is the FileList object from the input
     const formData = new FormData();
-    const fileStructure = [];
 
-    for (let file of files) {
-        fileStructure.push({
-            name: file.name,
-            relativePath: file.webkitRelativePath,
-        });
-        formData.append('files', file);
+    // Assuming only one file (the zip file) is uploaded:
+    if (files.length > 0) {
+        formData.append('zipFile', files[0]); // 'zipFile' should match the field name in the backend
+    } else {
+        setError('No file selected. Please upload a zip file.');
+        setLoading(false);
+        return;
     }
 
-    console.log('Uploaded file structure:', fileStructure);
-
     try {
-        const validateResponse = await axios.post('http://localhost:5000/api/datasets/validate', formData, {
+        const validateResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -76,6 +75,7 @@ const CreateVoiceModel = () => {
         setLoading(false);
     }
 };
+
 
   return (
     <div>

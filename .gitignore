@@ -2,8 +2,9 @@ env/*
 dataspeech/*
 parler-tts/*
 reinforce/
-extracted_files/*
-python_helpers/*
+**/extracted/*
+python-backend/*
+*.spec
 reinforce.txt
 test_*
 vox_fabrik.py
