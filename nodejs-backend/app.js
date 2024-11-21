@@ -10,9 +10,7 @@ const upload = multer({ dest: 'uploads/' });
 
 const PORT = 8080;
 
-app.use(cors({
-    origin: ['http://localhost:3000', 'https://shalinir8.github.io/']
-}));
+app.use(cors());
 app.use(express.json());
 
 app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res) => {

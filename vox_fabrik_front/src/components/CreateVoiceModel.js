@@ -58,7 +58,7 @@ const CreateVoiceModel = () => {
 
     try {
       const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
       });
 
       if (validateZipResponse.data.status !== 'success') {
@@ -71,7 +71,7 @@ const CreateVoiceModel = () => {
       setLoadingStage('csvValidation');
 
       const validateCsvResponse = await axios.post(`${pythonBaseUrl}/api/v1/datasets/validate_csv`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
       });
 
       if (validateCsvResponse.data.status !== 'success') {
