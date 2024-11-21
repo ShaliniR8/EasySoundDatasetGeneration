@@ -24,7 +24,7 @@ app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res)
     }
 
     try {
-        const extractPath = path.join(__dirname, 'extracted');
+        const extractPath = path.join(__dirname, '../', 'extracted');
         await fs.promises.mkdir(extractPath, { recursive: true });
 
         await fs.createReadStream(filePath)
@@ -35,7 +35,6 @@ app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res)
         if (!extractedFiles.includes('wavs') || !extractedFiles.includes('metadata.csv')) {
             return res.status(400).json({ status: 'error', message: `Invalid content. The zip file must contain a "wavs" folder and a "metadata.csv" file. Searched in: ${extractedFiles.join(', ')}` });
         }
-
         res.json({ status: 'success', message: 'Validation successful.' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: 'An error occurred during file extraction or validation.' });

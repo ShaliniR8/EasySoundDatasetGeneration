@@ -18,8 +18,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "cross-env REACT_APP_API_NODEJS_BASE_URL=http://localhost:8080 react-scripts start",
-    "build": "cross-env REACT_APP_API_NODEJS_BASE_URL=http://localhost:8080 react-scripts build",
+    "start": "cross-env REACT_APP_API_PYTHON_BASE_URL=http://localhost:5000 REACT_APP_API_NODEJS_BASE_URL=http://localhost:8080 react-scripts start",
+    "build": "bash ./app_build.sh",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build -b gh-pages"
   },

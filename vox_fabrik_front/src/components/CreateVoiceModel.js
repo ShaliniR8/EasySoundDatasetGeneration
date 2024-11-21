@@ -5,6 +5,7 @@ import axios from 'axios';
 import styled from '@emotion/styled';
 
 const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
+const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
 const VisuallyHiddenInput = styled('input')({
   display: 'none',
 });
@@ -28,60 +29,74 @@ const style = {
 const CreateVoiceModel = () => {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('idle');
+  const [successMessage, setSuccessMessage] = useState(null);
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => {
     setOpen(false);
     setError(null);
-    setSuccess(false);
+    setSuccessMessage(null);
+    setLoadingStage('idle');
   };
 
   const handleFileUpload = async (event) => {
-    setLoading(true);
+    setLoadingStage('zipValidation');
     setError(null);
-    setSuccess(false);
+    setSuccessMessage(null);
 
-    const files = event.target.files; // This is the FileList object from the input
+    const files = event.target.files;
     const formData = new FormData();
 
-    // Assuming only one file (the zip file) is uploaded:
     if (files.length > 0) {
-        formData.append('zipFile', files[0]); // 'zipFile' should match the field name in the backend
+      formData.append('zipFile', files[0]);
     } else {
-        setError('No file selected. Please upload a zip file.');
-        setLoading(false);
-        return;
+      setError('No file selected. Please upload a zip file.');
+      setLoadingStage('idle');
+      return;
     }
 
     try {
-        const validateResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
+      const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
-        if (validateResponse.data.status === 'success') {
-            setSuccess(true);
-        } else {
-            setError('Validation failed: ' + validateResponse.data.message);
-        }
+      if (validateZipResponse.data.status !== 'success') {
+        setError('Validation failed: ' + validateZipResponse.data.message);
+        setLoadingStage('idle');
+        return;
+      }
+
+      setSuccessMessage('ZIP file validated successfully.');
+      setLoadingStage('csvValidation');
+
+      const validateCsvResponse = await axios.post(`${pythonBaseUrl}/api/v1/datasets/validate_csv`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (validateCsvResponse.data.status !== 'success') {
+        setError('CSV validation failed: ' + validateCsvResponse.data.message);
+        setLoadingStage('idle');
+        return;
+      }
+
+      setSuccessMessage('CSV file validated successfully.');
+      setLoadingStage('idle');
     } catch (err) {
-        if (err.response && err.response.data && err.response.data.message) {
-            setError('An error occurred: ' + err.response.data.message);
-        } else {
-            setError('An unexpected error occurred: ' + err.message);
-        }
-    } finally {
-        setLoading(false);
+      if (err.response && err.response.data && err.response.data.message) {
+        setError('An error occurred: ' + err.response.data.message);
+      } else {
+        setError('An unexpected error occurred: ' + err.message);
+      }
+      setLoadingStage('idle');
     }
-};
-
+  };
 
   return (
     <div>
-      <Button 
-        variant="contained" 
-        color="primary" 
+      <Button
+        variant="contained"
+        color="primary"
         onClick={handleOpen}
       >
         Create Voice Model
@@ -101,7 +116,7 @@ const CreateVoiceModel = () => {
             2. The <Highlight>metadata.csv</Highlight> file should be delimited by <Highlight>|</Highlight>.<br />
             3. The CSV file should have two columns: <Highlight>audio</Highlight> and <Highlight>transcript</Highlight>. <Highlight>audio</Highlight> should contain the name of the audio file, and <Highlight>transcript</Highlight> should contain the text spoken in the audio file.
           </Typography>
-          
+
           <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
             <Button
               component="label"
@@ -113,16 +128,18 @@ const CreateVoiceModel = () => {
               Upload Folder
               <VisuallyHiddenInput
                 type="file"
-                webkitdirectory="true" // Allows folder selection
+                webkitdirectory="true"
                 multiple
                 onChange={handleFileUpload}
               />
             </Button>
           </Box>
 
-          {loading && <CircularProgress sx={{ mt: 2 }} />}
+          {loadingStage === 'zipValidation' && <Alert severity="info" sx={{ mt: 2 }}>Validating ZIP file...</Alert>}
+          {loadingStage === 'csvValidation' && <Alert severity="info" sx={{ mt: 2 }}>Validating CSV file...</Alert>}
           {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-          {success && <Alert severity="success" sx={{ mt: 2 }}>Dataset successfully created!</Alert>}
+          {successMessage && <Alert severity="success" sx={{ mt: 2 }}>{successMessage}</Alert>}
+          {loadingStage !== 'idle' && <CircularProgress sx={{ mt: 2 }} />}
         </Box>
       </Modal>
     </div>
