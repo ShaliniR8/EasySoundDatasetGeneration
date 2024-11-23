@@ -10,7 +10,7 @@ function App() {
   const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
 
   useEffect(() => {
-    axios.get(`${pythonBaseUrl}/api/home`, {
+    axios.get(`${pythonBaseUrl}/api/v1/home`, {
       headers: { "ngrok-skip-browser-warning": "1" }
     })
       .then(response => setData(response.data.message))

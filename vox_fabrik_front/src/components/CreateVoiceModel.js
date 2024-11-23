@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Button, Typography, Box, Modal, Alert, CircularProgress } from '@mui/material';
+import { Button, Typography, Box, Modal, Alert, CircularProgress, LinearProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import axios from 'axios';
+import { io } from "socket.io-client"; // Import socket.io-client
 import styled from '@emotion/styled';
 
 const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
@@ -31,6 +32,7 @@ const CreateVoiceModel = () => {
   const [error, setError] = useState(null);
   const [loadingStage, setLoadingStage] = useState('idle');
   const [successMessage, setSuccessMessage] = useState(null);
+  const [progress, setProgress] = useState(0);
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => {
@@ -38,6 +40,7 @@ const CreateVoiceModel = () => {
     setError(null);
     setSuccessMessage(null);
     setLoadingStage('idle');
+    setProgress(0); // Reset progress on close
   };
 
   const handleFileUpload = async (event) => {
@@ -81,7 +84,39 @@ const CreateVoiceModel = () => {
       }
 
       setSuccessMessage('CSV file validated successfully.');
-      setLoadingStage('idle');
+      setLoadingStage('extractingFeatures');
+
+      try {
+        await axios.post(`${pythonBaseUrl}/api/v1/datasets/feature_extraction`, {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        setError('Failed to start feature extraction.');
+        setLoadingStage('idle');
+        return;
+      }
+
+      const socket = io(pythonBaseUrl, {
+        path: '/socket.io/',
+        transports: ['websocket'],
+      });
+
+      socket.on("connect", () => {
+        console.log("Socket.IO connected:", socket.id);
+      });
+
+      socket.on("status", (data) => {
+        console.log("Status update:", data);
+      });
+
+      socket.on("progress", (data) => {
+        console.log("Progress update:", data);
+        setProgress(data.progress);
+      });
+
+      socket.on("disconnect", () => {
+        console.log("Socket.IO disconnected");
+      });
     } catch (err) {
       if (err.response && err.response.data && err.response.data.message) {
         setError('An error occurred: ' + err.response.data.message);
@@ -94,19 +129,10 @@ const CreateVoiceModel = () => {
 
   return (
     <div>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleOpen}
-      >
+      <Button variant="contained" color="primary" onClick={handleOpen}>
         Create Voice Model
       </Button>
-      <Modal
-        open={open}
-        onClose={handleClose}
-        aria-labelledby="create-voice-model-modal"
-        aria-describedby="instructions-for-uploading-audio-folder"
-      >
+      <Modal open={open} onClose={handleClose} aria-labelledby="create-voice-model-modal" aria-describedby="instructions-for-uploading-audio-folder">
         <Box sx={style}>
           <Typography id="create-voice-model-modal" variant="h6" component="h2">
             Instructions
@@ -118,25 +144,21 @@ const CreateVoiceModel = () => {
           </Typography>
 
           <Box sx={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-            <Button
-              component="label"
-              role={undefined}
-              variant="contained"
-              tabIndex={-1}
-              startIcon={<CloudUploadIcon />}
-            >
+            <Button component="label" role={undefined} variant="contained" tabIndex={-1} startIcon={<CloudUploadIcon />}>
               Upload Folder
-              <VisuallyHiddenInput
-                type="file"
-                webkitdirectory="true"
-                multiple
-                onChange={handleFileUpload}
-              />
+              <VisuallyHiddenInput type="file" webkitdirectory="true" multiple onChange={handleFileUpload} />
             </Button>
           </Box>
 
           {loadingStage === 'zipValidation' && <Alert severity="info" sx={{ mt: 2 }}>Validating ZIP file...</Alert>}
           {loadingStage === 'csvValidation' && <Alert severity="info" sx={{ mt: 2 }}>Validating CSV file...</Alert>}
+          {loadingStage === 'extractingFeatures' && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="info">Extracting Features...</Alert>
+              <LinearProgress variant="determinate" value={progress} sx={{ mt: 1 }} />
+              <Typography>{progress}%</Typography>
+            </Box>
+          )}
           {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
           {successMessage && <Alert severity="success" sx={{ mt: 2 }}>{successMessage}</Alert>}
           {loadingStage !== 'idle' && <CircularProgress sx={{ mt: 2 }} />}
