@@ -60,7 +60,11 @@ const CreateVoiceModel = () => {
     }
 
     try {
-      const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
+      // const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
+      //   headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
+      // });
+
+      const validateZipResponse = await axios.post('https://78e9-2603-8001-b6f0-1780-94dc-8161-73fd-f148.ngrok-free.app/api/v2/datasets/validate', formData, {
         headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
       });
 
@@ -88,7 +92,7 @@ const CreateVoiceModel = () => {
 
       try {
         await axios.post(`${pythonBaseUrl}/api/v1/datasets/feature_extraction`, {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": "1"},
         });
       } catch (error) {
         setError('Failed to start feature extraction.');
