@@ -20,4 +20,4 @@ echo "Extracted nodejs-backend URL: $NODEJS_BACKEND_URL ..."
 
 # Set environment variables and build the project
 echo "Setting up environment variables..."
-cross-env REACT_APP_API_PYTHON_BASE_URL="$PYTHON_BACKEND_URL" REACT_APP_API_NODEJS_BASE_URL="$NODEJS_BACKEND_URL" react-scripts build
+cross-env REACT_APP_API_PYTHON_BASE_URL="$PYTHON_BACKEND_URL" REACT_APP_API_NODEJS_BASE_URL="$NODEJS_BACKEND_URL" react-scripts start

@@ -60,11 +60,8 @@ const CreateVoiceModel = () => {
     }
 
     try {
-      // const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
-      //   headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
-      // });
-
-      const validateZipResponse = await axios.post('https://78e9-2603-8001-b6f0-1780-94dc-8161-73fd-f148.ngrok-free.app/api/v2/datasets/validate', formData, {
+      // TODO: Handle CORS 
+      const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
         headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
       });
 

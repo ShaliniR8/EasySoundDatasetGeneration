@@ -10,13 +10,7 @@ const upload = multer({ dest: 'uploads/' });
 
 const PORT = 8080;
 
-const corsOptions = {
-    origin: ['https://shalinir8.github.io', 'http://localhost:3000'],
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'ngrok-skip-browser-warning'],
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 
 app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res) => {
@@ -31,10 +25,8 @@ app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res)
                 const fileToDelete = path.join(directoryPath, file);
                 const stats = await fs.promises.stat(fileToDelete);
                 if (stats.isDirectory()) {
-                    // Recursively delete directory
                     await fs.promises.rm(fileToDelete, { recursive: true, force: true });
                 } else {
-                    // Delete file
                     await fs.promises.unlink(fileToDelete);
                 }
             }
@@ -44,7 +36,6 @@ app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res)
                 console.error(`Failed to clean directory ${directoryPath}:`, error);
                 throw error;
             }
-            // If directory doesn't exist, proceed without error
         }
     }
     // ----------------------
