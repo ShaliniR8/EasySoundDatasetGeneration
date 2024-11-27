@@ -1,38 +1,58 @@
 import os
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
+
+# Transitioned from Flask to FastAPI due to FastAPI's async architecture.
+# FastAPI - improved performance, built-in data validation, (TODO) automatic documentation generation.
+
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.background import BackgroundTasks
 from python_helpers.dataset_functions import validate_csv, dataset_feature_extraction
 
-app = Flask(__name__)
-CORS(app)
-app.config['UPLOAD_FOLDER'] = 'extracted'
-app.config['FLASK_DIRECTORY'] = os.path.dirname(os.path.realpath(__file__))
-socketio = SocketIO(app, cors_allowed_origins="*")
+app = FastAPI()
 
-@app.route('/api/v1/datasets/validate_csv', methods=['POST'])
-def validate():
-    response, status_code = validate_csv(app.config['UPLOAD_FOLDER'], app.config['FLASK_DIRECTORY'])
-    return jsonify(response), status_code
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route('/api/v1/datasets/feature_extraction', methods=['POST'])
-def feature_extraction():
-    socketio.start_background_task(target=dataset_feature_extraction, socketio_obj=socketio)
-    return jsonify({"status": "success", "message": "Feature extraction started"}), 200
+UPLOAD_FOLDER = 'extracted'
+FLASK_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 
-@socketio.on('connect')
-def on_connect():
-    emit('status', {'message': 'Connection established'})
+@app.post("/api/v1/datasets/validate_csv")
+async def validate():
+    response, status_code = validate_csv(UPLOAD_FOLDER, FLASK_DIRECTORY)
+    return JSONResponse(content=response, status_code=status_code)
 
-@socketio.on('disconnect')
-def on_disconnect():
-    print("WebSocket disconnected")
+@app.websocket("/ws/feature_extraction")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_json({"message": "Connection established"})
 
-@app.route('/api/v1/home', methods=['GET'])
-def home():
-    data = {'message': 'Backend is running.'}
-    return jsonify(data)
+    try:
+        await dataset_feature_extraction(websocket)
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
 
+@app.get("/api/v1/home")
+async def home():
+    return {"message": "Backend is running."}
 
-if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_json({"message": "Connection established"})
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Message received: {data}")
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000, reload=True)

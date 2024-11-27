@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Button, Typography, Box, Modal, Alert, CircularProgress, LinearProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import axios from 'axios';
-import { io } from "socket.io-client"; // Import socket.io-client
 import styled from '@emotion/styled';
 
 const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
 const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
+const websocketUrl = process.env.REACT_APP_API_WEBSOCKET_URL;
 const VisuallyHiddenInput = styled('input')({
   display: 'none',
 });
@@ -60,9 +60,9 @@ const CreateVoiceModel = () => {
     }
 
     try {
-      // TODO: Handle CORS 
+      // TODO: Handle CORS
       const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
+        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": true },
       });
 
       if (validateZipResponse.data.status !== 'success') {
@@ -75,7 +75,7 @@ const CreateVoiceModel = () => {
       setLoadingStage('csvValidation');
 
       const validateCsvResponse = await axios.post(`${pythonBaseUrl}/api/v1/datasets/validate_csv`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": "1" },
+        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": true },
       });
 
       if (validateCsvResponse.data.status !== 'success') {
@@ -87,37 +87,34 @@ const CreateVoiceModel = () => {
       setSuccessMessage('CSV file validated successfully.');
       setLoadingStage('extractingFeatures');
 
-      try {
-        await axios.post(`${pythonBaseUrl}/api/v1/datasets/feature_extraction`, {
-          headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": "1"},
-        });
-      } catch (error) {
-        setError('Failed to start feature extraction.');
-        setLoadingStage('idle');
-        return;
-      }
+      const socket = new WebSocket(`${websocketUrl}/feature_extraction`);
+      console.log(`${websocketUrl}/feature_extraction`)
+      socket.onopen = () => {
+        console.log("WebSocket connected to:", websocketUrl);
+      };
+      
+      socket.onmessage = (event) => {
+        console.log("Raw WebSocket message:", event.data);
+        const data = JSON.parse(event.data);
+        console.log("Parsed message:", data);
 
-      const socket = io(pythonBaseUrl, {
-        path: '/socket.io/',
-        transports: ['websocket'],
-      });
+        if (data.type === "status") {
+            console.log("Status update:", data.message);
+        }
 
-      socket.on("connect", () => {
-        console.log("Socket.IO connected:", socket.id);
-      });
-
-      socket.on("status", (data) => {
-        console.log("Status update:", data);
-      });
-
-      socket.on("progress", (data) => {
-        console.log("Progress update:", data);
-        setProgress(data.progress);
-      });
-
-      socket.on("disconnect", () => {
-        console.log("Socket.IO disconnected");
-      });
+        if (data.type === "progress") {
+            console.log("Progress update:", data.progress);
+            setProgress(data.progress);
+        }
+      };
+      
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+      
+      socket.onclose = () => {
+        console.log("WebSocket connection closed");
+      };
     } catch (err) {
       if (err.response && err.response.data && err.response.data.message) {
         setError('An error occurred: ' + err.response.data.message);

@@ -20,6 +20,7 @@
   },
   "scripts": {
     "start": "bash ./app_start.sh",
+    "start-dev": "cross-env REACT_APP_API_PYTHON_BASE_URL='http://localhost:5000' REACT_APP_API_WEBSOCKET_URL='ws://localhost:5000/ws' REACT_APP_API_NODEJS_BASE_URL='http://localhost:8080' react-scripts start",
     "build": "bash ./app_build.sh",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build -b gh-pages"
