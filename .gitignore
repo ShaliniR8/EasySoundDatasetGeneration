@@ -7,6 +7,8 @@ python-backend/*
 *.spec
 test_*
 script.sh
+output_*
+*.pyc
 **/node_modules/*
 **/package-lock.json
 **/.pnp
