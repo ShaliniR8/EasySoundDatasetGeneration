@@ -24,3 +24,6 @@ output_*
 **/yarn-debug.log*
 **/yarn-error.log*
 **/uploads/*
+**/casted
+audio_code_tmp
+tmp_dataset_audio
