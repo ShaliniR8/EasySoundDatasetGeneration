@@ -7,6 +7,7 @@ python-backend/*
 *.spec
 test_*
 script.sh
+models/
 output_*
 *.pyc
 **/node_modules/*
