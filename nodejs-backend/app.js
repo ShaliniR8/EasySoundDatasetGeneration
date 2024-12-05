@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res) => {
-    const filePath = req.file?.path; // Ensure the file path is correct
+    const filePath = req.file?.path;
     const fileMime = req.file.mimetype;
     const extractPath = path.join(__dirname, '../', 'extracted');
     // --- Cleanup Logic ---
@@ -68,6 +68,24 @@ app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res)
         });
     }
 });
+
+app.get('/api/v2/models', (req, res) => {
+    const modelsDir = path.join(__dirname, '../models');
+
+    fs.readdir(modelsDir, { withFileTypes: true }, (err, files) => {
+        if (err) {
+        console.error('Error reading models directory:', err);
+        return res.status(500).json({ error: 'Failed to fetch models' });
+        }
+
+        const folders = files
+        .filter((file) => file.isDirectory())
+        .map((folder) => folder.name);
+
+        res.json(folders);
+    });
+});
+
 
 app.listen(PORT, () => {
     console.log(`Node.js server is running on http://localhost:${PORT}`);

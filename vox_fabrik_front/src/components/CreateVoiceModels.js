@@ -27,7 +27,7 @@ const style = {
   p: 4,
 };
 
-const CreateVoiceModel = () => {
+const CreateVoiceModels = () => {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState(null);
   const [loadingStage, setLoadingStage] = useState('idle');
@@ -100,6 +100,14 @@ const CreateVoiceModel = () => {
 
         if (data.type === "status") {
             console.log("Status update:", data.message);
+            if (data.status =='success') {
+              setSuccessMessage(data.message);
+              setLoadingStage('idle');
+            } else {
+              setError('Feature Extraction failed');
+              setLoadingStage('idle');
+              return;
+            }
         }
 
         if (data.type === "progress") {
@@ -166,4 +174,4 @@ const CreateVoiceModel = () => {
   );
 };
 
-export default CreateVoiceModel;
+export default CreateVoiceModels;
