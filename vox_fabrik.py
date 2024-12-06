@@ -22,14 +22,18 @@ app.add_middleware(
 
 UPLOAD_FOLDER = 'extracted'
 FLASK_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
-# TTS_MODELS = TTLCache(maxsize=10, ttl=3600) 
+TTS_MODELS = TTLCache(maxsize=10, ttl=3600) 
 TTS_MODEL = None
 AUDIO_FILE_PATH = None
 
 @app.get("/api/v1/model")
 async def set_model(folder_name: str): 
-    TTS_MODEL = TTSModel(folder_name=f"./models/{folder_name}")
-    return {"message": "Set TTS Model Successfully."}
+    folder_path = f"./models/{folder_name}"
+    if folder_name in TTS_MODELS:
+        return {"message": f"TTS Model for '{folder_name}' is already loaded."}
+
+    TTS_MODELS[folder_name] = TTSModel(folder_path=folder_path)
+    return {"message": f"TTS Model for '{folder_name}' loaded and cached successfully."}
 
 # class ChopRequest(BaseModel):
 #     start: float
