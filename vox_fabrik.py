@@ -1,13 +1,13 @@
 import os
-from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 # Transitioned from Flask to FastAPI due to FastAPI's async architecture.
 # FastAPI - improved performance, built-in data validation, (TODO) automatic documentation generation.
 
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.background import BackgroundTasks
 from python_helpers.dataset_functions import validate_csv, dataset_feature_extraction
+from python_helpers.parler_tts.load_model import generate_audio, TTSModel
 
 app = FastAPI()
 
