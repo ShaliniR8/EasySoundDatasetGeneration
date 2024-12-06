@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { Button, Typography, Box, Modal, IconButton, List, ListItem } from '@mui/material';
+import { Button, Typography, Box, Modal, IconButton, List, ListItem, CircularProgress } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
+const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
 
 const VoiceModels = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [folders, setFolders] = useState([]);
+  const [loadingStage, setLoadingStage] = useState('idle');
+
   const navigate = useNavigate();
 
   const fetchFolders = async () => {
+    setLoadingStage('fetchFolders'); 
     try {
       const { data } = await axios.get(`${nodeJSBaseUrl}/api/v2/models`, {
         headers: { "ngrok-skip-browser-warning": true },
@@ -26,6 +30,8 @@ const VoiceModels = () => {
     } catch (error) {
       console.error('Error fetching folders:', error);
       setFolders([]);
+    } finally {
+      setLoadingStage('idle'); // Reset loading state
     }
   };
 
@@ -34,10 +40,22 @@ const VoiceModels = () => {
     if (isOpen) fetchFolders();
   };
 
-  const handleOpenTTS = (folderName) => {
-    navigate('/tts', { state: { folderName } }); // Navigate to TTS with folder name
+  const handleOpenTTS = async (folderName) => {
+    setLoadingStage('getModel');
+    try {
+      const { data } = await axios.get(`${pythonBaseUrl}/api/v1/model`, {
+        params: { folder_name: folderName },
+        headers: { "ngrok-skip-browser-warning": true },
+      });
+      console.log(data.message);
+      navigate('/tts', { state: { folderName } });
+    } catch (error) {
+      console.error('Error fetching model:', error);
+    } finally {
+      setLoadingStage('idle');
+    }
   };
-  
+
   return (
     <>
       <Button variant="contained" color="secondary" onClick={() => toggleModal(true)}>
@@ -63,7 +81,12 @@ const VoiceModels = () => {
               <CloseIcon />
             </IconButton>
           </Box>
-          {Array.isArray(folders) && folders.length > 0 ? (
+
+          {loadingStage === 'fetchFolders' ? (
+            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+              <CircularProgress />
+            </Box>
+          ) : folders.length > 0 ? (
             <List>
               {folders.map((folder, index) => (
                 <ListItem
@@ -99,14 +122,15 @@ const VoiceModels = () => {
                       fontWeight: 600,
                     }}
                     onClick={() => handleOpenTTS(folder)}
+                    disabled={loadingStage === 'getModel'}
                   >
-                    Open
+                    {loadingStage === 'getModel' ? <CircularProgress size={20} /> : 'Open'}
                   </Button>
                 </ListItem>
               ))}
             </List>
           ) : (
-            <Typography>{folders.length === 0 ? 'No folders found.' : 'Loading folders...'}</Typography>
+            <Typography>No folders found.</Typography>
           )}
         </Box>
       </Modal>

@@ -21,6 +21,12 @@ app.add_middleware(
 
 UPLOAD_FOLDER = 'extracted'
 FLASK_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+TTS_MODEL = None
+
+@app.get("/api/v1/model")
+async def set_model(): 
+    TTS_MODEL = TTSModel(folder_name="./models/GODLY_CHORD")
+    return {"message": "Set TTS Model Successfully."}
 
 @app.post("/api/v1/datasets/validate_csv")
 async def validate():
