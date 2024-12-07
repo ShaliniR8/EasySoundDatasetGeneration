@@ -1,62 +1,120 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, ButtonGroup, TextField, Typography, Grid } from '@mui/material';
+import { Box, Button, ButtonGroup, TextField, Typography, Grid, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import WaveSurfer from 'wavesurfer.js';
-import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline';
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
+import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js'
 import axios from 'axios';
 
 const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
+const audioUrl = 'tts.wav';
+const regions = RegionsPlugin.create()
 
 const TTS = () => {
   const waveformRef = useRef(null);
   const timelineRef = useRef(null);
   const wavesurfer = useRef(null);
 
-  const [audioUrl, setAudioUrl] = useState(null);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [inputText, setInputText] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  const handleOpenDialog = () => setIsDialogOpen(true);
+  const handleCloseDialog = () => setIsDialogOpen(false);
 
   useEffect(() => {
     wavesurfer.current = WaveSurfer.create({
       container: waveformRef.current,
       waveColor: '#673ab7',
       progressColor: '#d1c4e9',
-      height: 80,
+      height: 120,
       plugins: [
-        TimelinePlugin.create({
-          container: timelineRef.current,
+        regions, 
+        Hover.create({
+          lineColor: '#ff0000',
+          lineWidth: 2,
+          labelBackground: '#555',
+          labelColor: '#fff',
+          labelSize: '11px',
+          formatTimeCallback: (seconds) => seconds.toFixed(2)
         }),
       ],
     });
 
+    wavesurfer.current.on('decode', () => {
+      regions.clearRegions();
+      regions.addRegion({
+        start: 0, 
+        end: wavesurfer.current.getDuration(),
+        content: 'Play, Resize, Crop', 
+        color: 'rgba(144, 202, 249, 0.4)', 
+        resize: true,
+      });
+    });
+
+    console.log('WaveSurfer instance initialized:', wavesurfer.current);
+  
+    wavesurfer.current.on('error', (e) => {
+      console.error('WaveSurfer error:', e);
+      alert('Error loading audio file.');
+    });
+  
     return () => {
       if (wavesurfer.current) {
         wavesurfer.current.destroy();
       }
     };
   }, []);
+  
 
-  useEffect(() => {
-    if (audioUrl && wavesurfer.current) {
+  const refreshWaveform = () => {
+    if (wavesurfer.current) {
+      console.log('audio URL: ', audioUrl);
       wavesurfer.current.load(audioUrl);
 
       wavesurfer.current.on('ready', () => {
         const duration = wavesurfer.current.getDuration();
+        console.log('Audio loaded successfully. Duration:', duration);
         setEndTime(duration.toFixed(1));
       });
-    }
-  }, [audioUrl]);
 
-  const playSubsection = () => {
-    if (!wavesurfer.current) return;
-    if (startTime < endTime) {
-      wavesurfer.current.play(startTime, endTime);
-    } else {
-      alert('Invalid start or end time.');
+      regions.on('region-updated', (region) => {
+        setStartTime(region.start);
+        setEndTime(region.end);
+        console.log('Updated region', region);
+      })
+
+      let activeRegion = null
+      regions.on('region-in', (region) => {
+        console.log('region-in', region)
+        activeRegion = region
+      })
+
+      regions.on('region-out', (region) => {
+        console.log('region-out', region)
+        if (activeRegion === region) {
+          activeRegion = null
+        }
+      })
+
+      regions.on('region-clicked', (region, e) => {
+        e.stopPropagation() // prevent triggering a click on the waveform
+        activeRegion = region
+        region.play()
+      })
+
+      wavesurfer.current.on('interaction', () => {
+        activeRegion = null
+        wavesurfer.current.play()
+      })
+
+      wavesurfer.current.on('error', (e) => {
+        console.error('Error loading audio:', e);
+      });
     }
   };
 
@@ -67,28 +125,22 @@ const TTS = () => {
   };
 
   const chopAudio = async () => {
-    if (startTime < endTime) {
-      try {
-        const response = await axios.post(
-          `${pythonBaseUrl}/chop`,
-          { start: startTime, end: endTime },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': true
-            }
-          }
-        );
-        alert(response.data.message);
-        if (response.data.audio_url) {
-          setAudioUrl(response.data.audio_url);
+    handleCloseDialog(); // Close dialog after user confirms
+    try {
+      const response = await axios.post(
+        `${pythonBaseUrl}/chop`,
+        { start: startTime, end: endTime },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': true,
+          },
         }
-      } catch (error) {
-        console.error('Error chopping audio:', error);
-        alert('Error chopping audio.');
-      }
-    } else {
-      alert('Invalid start or end time.');
+      );
+      refreshWaveform();
+    } catch (error) {
+      console.error('Error chopping audio:', error);
+      alert('Error chopping audio.');
     }
   };
 
@@ -99,26 +151,19 @@ const TTS = () => {
     }
 
     try {
-      console.log(`URL: ${pythonBaseUrl}/api/v1/generate`)
-      console.log(`inputText: ${inputText}`)
       const response = await axios.post(
         `${pythonBaseUrl}/api/v1/generate`,
         { text: inputText },
         {
           headers: {
             'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': true
-          }
+            'ngrok-skip-browser-warning': true,
+          },
         }
       );
-
-      alert(response.data.message);
-      if (response.data.audio_url) {
-        setAudioUrl(response.data.audio_url);
-      } else {
-        // If no audio_url is provided, fallback
-        setAudioUrl('/tts.wav');
-      }
+      
+      console.log('Backend response:', response.data);
+      refreshWaveform();
     } catch (error) {
       console.error('Error generating audio:', error);
       alert('Error generating audio.');
@@ -138,39 +183,11 @@ const TTS = () => {
       <Box ref={timelineRef} sx={{ mb: 4 }}></Box>
 
       <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={3}>
-          <TextField
-            label="Start Time (seconds)"
-            type="number"
-            value={startTime}
-            onChange={(e) => setStartTime(parseFloat(e.target.value))}
-            fullWidth
-            InputProps={{ inputProps: { min: 0, step: 0.1 } }}
-          />
-        </Grid>
-        <Grid item xs={12} sm={3}>
-          <TextField
-            label="End Time (seconds)"
-            type="number"
-            value={endTime}
-            onChange={(e) => setEndTime(parseFloat(e.target.value))}
-            fullWidth
-            InputProps={{ inputProps: { min: 0, step: 0.1 } }}
-          />
-        </Grid>
         <Grid item xs={12} sm={6}>
           <ButtonGroup fullWidth>
             <Button
               variant="contained"
               color="primary"
-              startIcon={<PlayArrowIcon />}
-              onClick={playSubsection}
-            >
-              Play
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
               startIcon={<PauseIcon />}
               onClick={pausePlayback}
             >
@@ -180,7 +197,7 @@ const TTS = () => {
               variant="contained"
               color="success"
               startIcon={<ContentCutIcon />}
-              onClick={chopAudio}
+              onClick={handleOpenDialog}
             >
               Crop
             </Button>
@@ -211,6 +228,22 @@ const TTS = () => {
           </Button>
         </Grid>
       </Grid>
+      <Dialog open={isDialogOpen} onClose={handleCloseDialog}>
+        <DialogTitle>Confirm Audio Modification</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure? This audio will be modified, and you will not be able to recover the original audio.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog} color="secondary">
+            Cancel
+          </Button>
+          <Button onClick={chopAudio} color="primary">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
