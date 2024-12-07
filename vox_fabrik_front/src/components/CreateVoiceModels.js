@@ -40,98 +40,133 @@ const CreateVoiceModels = () => {
     setError(null);
     setSuccessMessage(null);
     setLoadingStage('idle');
-    setProgress(0); // Reset progress on close
+    setProgress(0);
   };
 
+  const validateZipFile = async (fileName) => {
+    try {
+        const response = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, { fileName }, {
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": true },
+        });
+
+        if (response.data.status === 'success') {
+            setSuccessMessage('ZIP file validated successfully.');
+            setLoadingStage('csvValidation');
+        } else {
+            setError(`Validation failed: ${response.data.message}`);
+            setLoadingStage('idle');
+        }
+    } catch (err) {
+        setError('Error validating zip file: ' + (err.response?.data?.message || err.message));
+        setLoadingStage('idle');
+    }
+};
+
+
   const handleFileUpload = async (event) => {
-    setLoadingStage('zipValidation');
+    setLoadingStage('uploading');
     setError(null);
     setSuccessMessage(null);
+    setProgress(0);
 
     const files = event.target.files;
-    const formData = new FormData();
+    const file = files[0];
 
-    if (files.length > 0) {
-      formData.append('zipFile', files[0]);
-    } else {
-      setError('No file selected. Please upload a zip file.');
-      setLoadingStage('idle');
-      return;
+    if (!file) {
+        setError('No file selected. Please upload a zip file.');
+        setLoadingStage('idle');
+        return;
+    }
+
+    const chunkSize = 1024 * 1024; // 1 MB
+    const totalChunks = Math.ceil(file.size / chunkSize);
+
+    // Upload chunks
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(file.size, start + chunkSize);
+        const chunk = file.slice(start, end);
+
+        const formData = new FormData();
+        formData.append('chunk', chunk);
+        formData.append('fileName', file.name);
+        formData.append('chunkIndex', chunkIndex);
+        formData.append('totalChunks', totalChunks);
+
+        try {
+            await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/upload-chunk`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": true },
+            });
+
+            setProgress(Math.round(((chunkIndex + 1) / totalChunks) * 100));
+        } catch (err) {
+            console.error('Error uploading chunk:', err.response ? err.response.data : err.message);
+            setError(`Failed to upload chunk ${chunkIndex + 1} of ${totalChunks}: ${err.message}`);
+            setLoadingStage('idle');
+            return;
+        }
     }
 
     try {
-      // TODO: Handle CORS
-      const validateZipResponse = await axios.post(`${nodeJSBaseUrl}/api/v2/datasets/validate`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": true },
-      });
+        setLoadingStage('zipValidation');
+        await validateZipFile(file.name);
 
-      if (validateZipResponse.data.status !== 'success') {
-        setError('Validation failed: ' + validateZipResponse.data.message);
-        setLoadingStage('idle');
-        return;
-      }
+        setLoadingStage('csvValidation');
+        const validateCsvResponse = await axios.post(`${pythonBaseUrl}/api/v1/datasets/validate_csv`, {
+          headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": true },
+        });
 
-      setSuccessMessage('ZIP file validated successfully.');
-      setLoadingStage('csvValidation');
-
-      const validateCsvResponse = await axios.post(`${pythonBaseUrl}/api/v1/datasets/validate_csv`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', "ngrok-skip-browser-warning": true },
-      });
-
-      if (validateCsvResponse.data.status !== 'success') {
-        setError('CSV validation failed: ' + validateCsvResponse.data.message);
-        setLoadingStage('idle');
-        return;
-      }
-
-      setSuccessMessage('CSV file validated successfully.');
-      setLoadingStage('extractingFeatures');
-
-      const socket = new WebSocket(`${websocketUrl}/feature_extraction`);
-      console.log(`${websocketUrl}/feature_extraction`)
-      socket.onopen = () => {
-        console.log("WebSocket connected to:", websocketUrl);
-      };
-      
-      socket.onmessage = (event) => {
-        console.log("Raw WebSocket message:", event.data);
-        const data = JSON.parse(event.data);
-        console.log("Parsed message:", data);
-
-        if (data.type === "status") {
-            console.log("Status update:", data.message);
-            if (data.status =='success') {
-              setSuccessMessage(data.message);
-              setLoadingStage('idle');
-            } else {
-              setError('Feature Extraction failed');
-              setLoadingStage('idle');
-              return;
-            }
+        if (validateCsvResponse.data.status !== 'success') {
+          setError('CSV validation failed: ' + validateCsvResponse.data.message);
+          setLoadingStage('idle');
+          return;
         }
 
-        if (data.type === "progress") {
-            console.log("Progress update:", data.progress);
-            setProgress(data.progress);
-        }
-      };
-      
-      socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
-      
-      socket.onclose = () => {
-        console.log("WebSocket connection closed");
-      };
+        setSuccessMessage('CSV file validated successfully.');
+        setLoadingStage('extractingFeatures');
+        const socket = new WebSocket(`${websocketUrl}/feature_extraction`);
+        console.log(`${websocketUrl}/feature_extraction`)
+        socket.onopen = () => {
+          console.log("WebSocket connected to:", websocketUrl);
+        };
+        
+        socket.onmessage = (event) => {
+          console.log("Raw WebSocket message:", event.data);
+          const data = JSON.parse(event.data);
+          console.log("Parsed message:", data);
+  
+          if (data.type === "status") {
+              console.log("Status update:", data.message);
+              if (data.status =='success') {
+                setSuccessMessage(data.message);
+                setLoadingStage('idle');
+              } else {
+                setError('Feature Extraction failed');
+                setLoadingStage('idle');
+                return;
+              }
+          }
+  
+          if (data.type === "progress") {
+              console.log("Progress update:", data.progress);
+              setProgress(data.progress);
+          }
+        };
+        
+        socket.onerror = (error) => {
+          console.error("WebSocket error:", error);
+        };
+        
+        socket.onclose = () => {
+          console.log("WebSocket connection closed");
+        };
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.message) {
-        setError('An error occurred: ' + err.response.data.message);
-      } else {
-        setError('An unexpected error occurred: ' + err.message);
-      }
-      setLoadingStage('idle');
+        console.error('Error validating zip file:', err.response ? err.response.data : err.message);
+        setError('Validation failed: ' + (err.response?.data?.message || err.message));
+        setLoadingStage('idle');
     }
-  };
+};
+
 
   return (
     <div>
@@ -168,6 +203,14 @@ const CreateVoiceModels = () => {
           {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
           {successMessage && <Alert severity="success" sx={{ mt: 2 }}>{successMessage}</Alert>}
           {loadingStage !== 'idle' && <CircularProgress sx={{ mt: 2 }} />}
+
+          {loadingStage === 'uploading' && (
+              <Box sx={{ mt: 2 }}>
+                  <Alert severity="info">Uploading file...</Alert>
+                  <LinearProgress variant="determinate" value={progress} sx={{ mt: 1 }} />
+                  <Typography>{progress}%</Typography>
+              </Box>
+          )}
         </Box>
       </Modal>
     </div>

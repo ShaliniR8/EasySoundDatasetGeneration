@@ -13,61 +13,111 @@ const PORT = 8080;
 app.use(cors());
 app.use(express.json());
 
-app.post('/api/v2/datasets/validate', upload.single('zipFile'), async (req, res) => {
-    const filePath = req.file?.path;
-    const fileMime = req.file.mimetype;
-    const extractPath = path.join(__dirname, '../', 'extracted');
-    // --- Cleanup Logic ---
-    async function cleanExtractPath(directoryPath) {
-        try {
-            const files = await fs.promises.readdir(directoryPath);
-            for (const file of files) {
-                const fileToDelete = path.join(directoryPath, file);
-                const stats = await fs.promises.stat(fileToDelete);
-                if (stats.isDirectory()) {
-                    await fs.promises.rm(fileToDelete, { recursive: true, force: true });
-                } else {
-                    await fs.promises.unlink(fileToDelete);
-                }
-            }
-            console.log(`Cleared contents of: ${directoryPath}`);
-        } catch (error) {
-            if (error.code !== 'ENOENT') {
-                console.error(`Failed to clean directory ${directoryPath}:`, error);
-                throw error;
-            }
-        }
-    }
-    // ----------------------
+const tempDir = path.join(__dirname, 'temp_chunks');
+const uploadsDir = path.join(__dirname, 'uploads');
 
-    if (fileMime !== 'application/zip' && fileMime !== 'application/x-zip-compressed') {
-        return res.status(400).json({ status: 'error', message: `Invalid file type: ${fileMime}. Please upload a zip file.` });
-    }
+const mergeChunks = async (chunkFiles, mergedFilePath, uploadsDir) => {
+    return new Promise((resolve, reject) => {
+        const writeStream = fs.createWriteStream(mergedFilePath);
+        const readAndWriteChunk = (index) => {
+            if (index >= chunkFiles.length) {
+                writeStream.end();
+                return resolve();
+            }
+            const chunkFilePath = path.join(uploadsDir, chunkFiles[index]);
+            const readStream = fs.createReadStream(chunkFilePath);
+            readStream
+                .on('error', reject)
+                .on('end', () => {
+                    fs.unlinkSync(chunkFilePath);
+                    readAndWriteChunk(index + 1);
+                })
+                .pipe(writeStream, { end: false });
+        };
+        readAndWriteChunk(0);
+    });
+};
+
+
+app.post('/api/v2/datasets/upload-chunk', upload.single('chunk'), (req, res) => {
+    const { fileName, chunkIndex } = req.body;
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const fileChunkPath = path.join(uploadsDir, `${fileName}.chunk.${chunkIndex}`);
+
+    fs.mkdir(uploadsDir, { recursive: true }, (err) => {
+        if (err) {
+            console.error('Error creating uploads directory:', err);
+            return res.status(500).send('Failed to create uploads directory.');
+        }
+
+        fs.rename(req.file.path, fileChunkPath, (err) => {
+            if (err) {
+                console.error('Error saving chunk:', err);
+                return res.status(500).send('Failed to save chunk.');
+            }
+
+            res.status(200).send('Chunk uploaded successfully.');
+        });
+    });
+});
+
+app.post('/api/v2/datasets/validate', async (req, res) => {
+    const fileName = 'datasets.zip';
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const mergedFilePath = path.join(uploadsDir, fileName);
+    const extractPath = path.join(__dirname, '../', 'extracted');
 
     try {
-        await fs.promises.mkdir(extractPath, { recursive: true });
-        await cleanExtractPath(extractPath);
-        
-        await fs.createReadStream(filePath)
-        .pipe(unzipper.Extract({ path: extractPath }))
-        .promise();
-        
+        const chunkFiles = fs.readdirSync(uploadsDir)
+            .filter(file => file.includes('.chunk.'))
+            .sort((a, b) => {
+                const indexA = parseInt(a.split('.').pop(), 10);
+                const indexB = parseInt(b.split('.').pop(), 10);
+                return indexA - indexB;
+            });
+
+        if (chunkFiles.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'No chunks found to merge.' });
+        }
+
+        chunkFiles.forEach((file) => {
+            const chunkFilePath = path.join(uploadsDir, file);
+            const size = fs.statSync(chunkFilePath).size;
+            if (size === 0) {
+                throw new Error(`Chunk ${file} is empty or missing.`);
+            }
+        });
+
+        await mergeChunks(chunkFiles, mergedFilePath, uploadsDir);
+        const isZip = require('is-zip');
+        if (!isZip(fs.readFileSync(mergedFilePath))) {
+            return res.status(400).json({ status: 'error', message: 'Merged file is not a valid zip file.' });
+        }
+
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(mergedFilePath);
+        zip.extractAllTo(extractPath, true);
+
         const extractedFiles = await fs.promises.readdir(extractPath);
-        console.log((!extractedFiles.includes('wavs') || !extractedFiles.includes('metadata.csv')))
+
         if (!extractedFiles.includes('wavs')) {
             return res.status(400).json({ status: 'error', message: `Invalid content. The zip file must contain a "wavs" folder. Searched in: ${extractedFiles.join(', ')}` });
-        }else if (!extractedFiles.includes('metadata.csv')){
+        } else if (!extractedFiles.includes('metadata.csv')) {
             return res.status(400).json({ status: 'error', message: `Invalid content. The zip file must contain a "metadata.csv" file. Searched in: ${extractedFiles.join(', ')}` });
         }
+
         res.json({ status: 'success', message: 'Validation successful.' });
-    } catch (error) {
-        res.status(500).json({ status: 'error', message: 'An error occurred during file extraction or validation.' });
-    } finally {
-        fs.unlink(filePath, (err) => {
-            if (err) console.error('Failed to delete temp file:', err);
+
+        fs.unlink(mergedFilePath, (err) => {
+            if (err) console.error('Failed to delete merged file:', err);
         });
+    } catch (error) {
+        console.error('Error processing file:', error);
+        res.status(500).json({ status: 'error', message: 'An error occurred during file extraction or validation.' });
     }
 });
+
+
 
 app.get('/api/v2/models', (req, res) => {
     const modelsDir = path.join(__dirname, '../models');

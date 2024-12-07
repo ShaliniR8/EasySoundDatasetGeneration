@@ -3,7 +3,7 @@ import { Container, Typography, ThemeProvider } from '@mui/material';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import axios from 'axios';
 import theme from './theme/theme';
-import { Title, HomePageButtons, TTS } from './components'; // Import TTS from ./components
+import { Title, HomePageButtons, TTS } from './components';
 
 function App() {
   const [data, setData] = useState(null);
