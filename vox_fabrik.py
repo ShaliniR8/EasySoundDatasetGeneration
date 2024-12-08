@@ -2,15 +2,18 @@
 # FastAPI - improved performance, built-in data validation, (TODO) automatic documentation generation.
 import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from python_helpers.dataset_functions import validate_csv, dataset_feature_extraction
-from python_helpers.parler_tts.load_model import generate_audio, TTSModel
+from python_helpers.parler_tts.load_model import generate_audio, chop_audio, TTSModel
 from cachetools import TTLCache
 
-class TextPayload(BaseModel):
-    text: str
+class RequestPayload(BaseModel):
+    text: Optional[str] = None
+    start: Optional[float] = None
+    end: Optional[float] = None
 
 app = FastAPI()
 
@@ -44,7 +47,7 @@ async def load_model(folder_name: str):
 
 
 @app.post("/api/v1/generate")
-async def generate(payload: TextPayload):
+async def generate(payload: RequestPayload):
     text = payload.text
     print(f"Received text: {text}")
     if not text:
@@ -55,9 +58,31 @@ async def generate(payload: TextPayload):
 
     try:
         generate_audio(text, TTS_MODEL)
-        return {"message": "Audio generated successfully", "audio_url": "/get_audio"}
+        return {"message": "Audio generated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/v1/audio")
+async def get_audio():
+    file_path = "tts.wav"
+    return FileResponse(file_path, media_type="audio/wav")
+    
+@app.post("/chop")
+async def chop(request: RequestPayload):
+    start = request.start
+    end = request.end
+    if start is None or end is None or start >= end:
+        raise HTTPException(status_code=400, detail="Invalid start or end time")
+    
+    audio_path = 'vox_fabrik_front/public/tts.wav'
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="No audio file found")
+
+    try:
+       return chop_audio(start, end, audio_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/api/v1/datasets/validate_csv")

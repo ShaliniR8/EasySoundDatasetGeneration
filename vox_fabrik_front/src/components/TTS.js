@@ -10,7 +10,7 @@ import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js'
 import axios from 'axios';
 
 const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
-const audioUrl = 'tts.wav';
+const audioUrl = `${pythonBaseUrl}/api/v1/audio`;
 const regions = RegionsPlugin.create()
 
 const TTS = () => {
@@ -71,10 +71,19 @@ const TTS = () => {
   }, []);
   
 
-  const refreshWaveform = () => {
+  const refreshWaveform = async () => {
     if (wavesurfer.current) {
       console.log('audio URL: ', audioUrl);
-      wavesurfer.current.load(audioUrl);
+      const response = await axios.get(`${pythonBaseUrl}/api/v1/audio`, {
+        headers: {
+          'ngrok-skip-browser-warning': true,
+        },
+        responseType: 'arraybuffer', // Required for binary data
+      });
+      const blob = new Blob([response.data], { type: 'audio/wav' });
+      const blobUrl = URL.createObjectURL(blob);
+      console.log('Blob URL being loaded:', blobUrl);
+      wavesurfer.current.load(blobUrl); 
 
       wavesurfer.current.on('ready', () => {
         const duration = wavesurfer.current.getDuration();
@@ -102,12 +111,14 @@ const TTS = () => {
       })
 
       regions.on('region-clicked', (region, e) => {
+        console.log('Stopping this from going to main waveform')
         e.stopPropagation() // prevent triggering a click on the waveform
         activeRegion = region
         region.play()
       })
 
       wavesurfer.current.on('interaction', () => {
+        console.log("Interacting with main waveform.")
         activeRegion = null
         wavesurfer.current.play()
       })
@@ -127,8 +138,9 @@ const TTS = () => {
   const chopAudio = async () => {
     handleCloseDialog(); // Close dialog after user confirms
     try {
+      debugger
       const response = await axios.post(
-        `${pythonBaseUrl}/chop`,
+        `${pythonBaseUrl}/api/v1/chop`,
         { start: startTime, end: endTime },
         {
           headers: {
