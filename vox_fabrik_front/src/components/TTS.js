@@ -1,19 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, ButtonGroup, TextField, Typography, Grid, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { useLocation } from 'react-router-dom';
+import { Box, Button, ButtonGroup, TextField, Typography, Grid, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, List,  IconButton } from '@mui/material';
 import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
+import AudioFileIcon from '@mui/icons-material/AudioFile';
+import ListIcon from '@mui/icons-material/List';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
 import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js'
+import RightDrawer from './KeptAudios'
 import axios from 'axios';
 
 const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
+const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
 const audioUrl = `${pythonBaseUrl}/api/v1/audio`;
 const regions = RegionsPlugin.create()
 
 const TTS = () => {
+  const location = useLocation();
+  const { folderName } = location.state || {};
   const waveformRef = useRef(null);
   const timelineRef = useRef(null);
   const wavesurfer = useRef(null);
@@ -22,9 +29,12 @@ const TTS = () => {
   const [endTime, setEndTime] = useState(0);
   const [inputText, setInputText] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [keptTexts, setKeptTexts] = useState([]);
+
   const handleOpenDialog = () => setIsDialogOpen(true);
   const handleCloseDialog = () => setIsDialogOpen(false);
+  const toggleDrawer = () => setIsDrawerOpen((prev) => !prev);
 
   useEffect(() => {
     wavesurfer.current = WaveSurfer.create({
@@ -88,7 +98,7 @@ const TTS = () => {
       wavesurfer.current.on('ready', () => {
         const duration = wavesurfer.current.getDuration();
         console.log('Audio loaded successfully. Duration:', duration);
-        setEndTime(duration.toFixed(1));
+        setEndTime(duration.toFixed(2));
       });
 
       regions.on('region-updated', (region) => {
@@ -98,21 +108,10 @@ const TTS = () => {
       })
 
       let activeRegion = null
-      regions.on('region-in', (region) => {
-        console.log('region-in', region)
-        activeRegion = region
-      })
-
-      regions.on('region-out', (region) => {
-        console.log('region-out', region)
-        if (activeRegion === region) {
-          activeRegion = null
-        }
-      })
 
       regions.on('region-clicked', (region, e) => {
         console.log('Stopping this from going to main waveform')
-        e.stopPropagation() // prevent triggering a click on the waveform
+        e.stopPropagation()
         activeRegion = region
         region.play()
       })
@@ -129,6 +128,22 @@ const TTS = () => {
     }
   };
 
+  const playSubsection = () => {
+    if (!wavesurfer.current) return;
+  
+    const duration = wavesurfer.current.getDuration();
+    wavesurfer.current.seekTo(startTime / duration);
+    wavesurfer.current.play();
+
+    const interval = setInterval(() => {
+      if (wavesurfer.current.getCurrentTime() >= endTime) {
+        wavesurfer.current.pause();
+        clearInterval(interval);
+      }
+    }, 5);
+  };
+  
+
   const pausePlayback = () => {
     if (wavesurfer.current && wavesurfer.current.isPlaying()) {
       wavesurfer.current.pause();
@@ -136,9 +151,9 @@ const TTS = () => {
   };
 
   const chopAudio = async () => {
-    handleCloseDialog(); // Close dialog after user confirms
+    handleCloseDialog();
     try {
-      debugger
+      console.log(endTime)
       const response = await axios.post(
         `${pythonBaseUrl}/api/v1/chop`,
         { start: startTime, end: endTime },
@@ -182,11 +197,83 @@ const TTS = () => {
     }
   };
 
+  const handleKeep = async () => {
+    if (!inputText.trim()) {
+      alert('Need both Text and Audio to keep.');
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        `${pythonBaseUrl}/api/v1/keep`,
+        { text: inputText, model_name: folderName },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': true,
+          },
+        }
+      );
+
+      console.log('Keep response:', response.data);
+      setKeptTexts((prev) => [...prev, inputText]);
+      setIsDrawerOpen(true);
+    } catch (error) {
+      console.error('Error keeping text:', error);
+      alert('Error keeping text.');
+    }
+  };
+
+  // TODO: Allow user to discard the samples
+  // const discardSamples = async () => {
+  //   try {
+  //     const response = await axios.post(
+  //       `${pythonBaseUrl}/api/v1/discard_all`,
+  //       { model_name: folderName },
+  //       {
+  //         headers: {
+  //           'Content-Type': 'application/json',
+  //           'ngrok-skip-browser-warning': true,
+  //         },
+  //       }
+  //     );
+  //   }catch (error) {
+  //     console.error('Error', error);
+  //     alert('Failed to discard the samples.');
+  //   }
+  // }
+
+  useEffect(() => {
+    if (!folderName){
+      alert("Please go to the main page and select a model.")
+      return;
+    };
+    (async () => {
+      try {
+        const response = await axios.get(`${nodeJSBaseUrl}/api/v2/get_kept_samples`, {
+          params: { folderName },
+          headers: {
+            'ngrok-skip-browser-warning': true,
+          },
+        });
+        console.log('Kept files: ', response.data.texts)
+        setKeptTexts(response.data.texts || []);
+      } catch (error) {
+        console.error('Error fetching kept samples:', error);
+      }
+    })();
+  }, [folderName, nodeJSBaseUrl]);
+
   return (
     <Box sx={{ p: 4 }}>
-      <Typography variant="h4" mb={4}>
-        Text-to-Speech (TTS) Tool
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Typography variant="h4">
+          Text-to-Speech (TTS) Tool
+        </Typography>
+        <IconButton onClick={toggleDrawer}>
+          <ListIcon />
+        </IconButton>
+      </Box>
 
       <Box
         ref={waveformRef}
@@ -195,23 +282,42 @@ const TTS = () => {
       <Box ref={timelineRef} sx={{ mb: 4 }}></Box>
 
       <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6}>
+        <Grid item xs={12} sm={8}>
           <ButtonGroup fullWidth>
             <Button
+                variant="contained"
+                color="primary"
+                startIcon={<PlayArrowIcon />}
+                onClick={playSubsection}
+              >
+                Play Subsection
+            </Button>
+            <Button
               variant="contained"
-              color="primary"
+              sx={{
+                backgroundColor: "#78909c",
+                '&:hover': { backgroundColor: "#90a4ae"},
+              }}
               startIcon={<PauseIcon />}
               onClick={pausePlayback}
             >
               Pause
             </Button>
             <Button
-              variant="contained"
-              color="success"
+              variant="outlined"
+              color="secondary"
               startIcon={<ContentCutIcon />}
               onClick={handleOpenDialog}
             >
               Crop
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<AudioFileIcon />}
+              onClick={handleKeep}
+            >
+              Keep
             </Button>
           </ButtonGroup>
         </Grid>
@@ -256,6 +362,25 @@ const TTS = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* TODO: Need to handle when user reloads page with kept samples */}
+      {/* <Dialog open={isUnloadDialogueOpen} onClose={handleCloseUnloadDialog}>
+        <DialogTitle>You have Unsaved Changes</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Please Download the kept sample to avoid losing progress.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseUnloadDialog} color="secondary">
+            Cancel
+          </Button>
+          <Button onClick={discardSamples} color="primary">
+            Discard Samples
+          </Button>
+        </DialogActions>
+      </Dialog> */}
+      <RightDrawer open={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} keptTexts={keptTexts} folderName={folderName}/>
     </Box>
   );
 };

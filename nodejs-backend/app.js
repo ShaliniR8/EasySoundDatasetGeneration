@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const unzipper = require('unzipper');
+const archiver = require('archiver');
 const fs = require('fs');
 const path = require('path');
 
@@ -136,6 +137,89 @@ app.get('/api/v2/models', (req, res) => {
     });
 });
 
+app.get('/api/v2/get_kept_samples', (req, res) => {
+    const folderName = req.query.folderName;
+    if (!folderName) {
+      return res.status(400).json({ error: 'folderName query param is required' });
+    }
+  
+    const csvPath = path.join(__dirname, '../.tmp', `${folderName}_metadata.csv`);
+  
+    if (!fs.existsSync(csvPath)) {
+      return res.status(404).json({ error: 'Metadata file not found for that folderName' });
+    }
+  
+    fs.readFile(csvPath, 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading CSV file:', err);
+        return res.status(500).json({ error: 'Error reading file' });
+      }
+  
+      const lines = data.trim().split('\n');
+      const texts = lines.map(line => {
+        const parts = line.split('|');
+        return parts[1] ? parts[1] : '';
+      }).filter(text => text.length > 0);
+  
+      res.json({ texts });
+    });
+  });
+
+  app.get('/api/v2/download', async (req, res) => {
+    const folderName = req.query.folderName;
+  
+    const baseDir = path.join(__dirname, '../.tmp');
+    const wavsFolder = path.join(baseDir, 'wavs');
+    const metadataFile = path.join(baseDir, `${folderName}_metadata.csv`);
+    const zipFileName = `${folderName}_files.zip`;
+    const zipFilePath = path.join(baseDir, zipFileName);
+  
+    try {
+      if (!fs.existsSync(wavsFolder) || !fs.existsSync(metadataFile)) {
+        return res.status(404).json({ error: 'Required files or folder not found' });
+      }
+  
+      const output = fs.createWriteStream(zipFilePath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      archive.pipe(output);
+
+      archive.file(metadataFile, { name: `${folderName}_metadata.csv` });
+  
+      const wavFiles = fs.readdirSync(wavsFolder).filter((file) => {
+        return file.startsWith(folderName) && file.endsWith('.wav');
+      });
+  
+      if (wavFiles.length === 0) {
+        return res.status(404).json({ error: 'No matching WAV files found' });
+      }
+  
+      const wavsFolderInZip = 'wavs';
+      wavFiles.forEach((file) => {
+        const filePath = path.join(wavsFolder, file);
+        archive.file(filePath, { name: path.join(wavsFolderInZip, file) });
+      });
+  
+      await archive.finalize();
+  
+      output.on('close', () => {
+        fs.unlinkSync(metadataFile);
+        wavFiles.forEach((file) => {
+          fs.unlinkSync(path.join(wavsFolder, file));
+        });
+
+        res.download(zipFilePath, zipFileName, (err) => {
+          if (err) {
+            console.error('Error sending the ZIP file:', err);
+          }
+          fs.unlinkSync(zipFilePath);
+        });
+      });
+    } catch (error) {
+      console.error('Error processing the request:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 
 app.listen(PORT, () => {
     console.log(`Node.js server is running on http://localhost:${PORT}`);

@@ -1,6 +1,7 @@
 # Transitioned from Flask to FastAPI due to FastAPI's async architecture.
 # FastAPI - improved performance, built-in data validation, (TODO) automatic documentation generation.
-import os
+import os, shutil
+from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Body
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from cachetools import TTLCache
 
 class RequestPayload(BaseModel):
     text: Optional[str] = None
+    model_name: Optional[str] = None
     start: Optional[float] = None
     end: Optional[float] = None
 
@@ -67,14 +69,14 @@ async def get_audio():
     file_path = "tts.wav"
     return FileResponse(file_path, media_type="audio/wav")
     
-@app.post("/chop")
+@app.post("/api/v1/chop")
 async def chop(request: RequestPayload):
     start = request.start
     end = request.end
     if start is None or end is None or start >= end:
         raise HTTPException(status_code=400, detail="Invalid start or end time")
     
-    audio_path = 'vox_fabrik_front/public/tts.wav'
+    audio_path = 'tts.wav'
     if not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="No audio file found")
 
@@ -83,7 +85,68 @@ async def chop(request: RequestPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/keep")
+def keep_text(request: RequestPayload):
+    text = request.text.strip()
+    model_name = request.model_name.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="No text provided.")
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{model_name}_{timestamp}.wav"
+
+    wavs_dir = ".tmp/wavs"
+    metadata_file = f".tmp/{model_name}_metadata.csv"
+    source_wav = "tts.wav"
+
+    if not os.path.exists(source_wav):
+        raise HTTPException(status_code=500, detail="No sound file found to keep.")
+
+    os.makedirs(wavs_dir, exist_ok=True)
+    dest_wav = os.path.join(wavs_dir, filename)
+
+    try:
+        shutil.copyfile(source_wav, dest_wav)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Error moving file: {str(e)}")
+
+    entry = f"{filename}|{text}\n"
+    try:
+        with open(metadata_file, "a", encoding="utf-8") as f:
+            f.write(entry)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Error writing metadata: {str(e)}")
+
+    return {"status": "success", "filename": filename, "text": text}
+
+# WOrk on this later
+# @app.post('/api/v1/discard_all')
+# async def discard_all(request: RequestPayload):
+#     model_name = request.model_name.strip()
+#     wavs_dir = ".tmp/wavs"
+#     metadata_file = f".tmp/{model_name}_metadata.csv"
+
+#     if os.path.exists(wavs_dir) and os.path.isdir(wavs_dir):
+#         for file_name in os.listdir(wavs_dir):
+#             if file_name.endswith(".wav") and file_name.startswith(model_name):
+#                 file_path = os.path.join(wavs_dir, file_name)
+#                 try:
+#                     os.remove(file_path)
+#                     print(f"Deleted: {file_path}")
+#                 except Exception as e:
+#                     print(f"Failed to delete {file_path}: {e}")
+#     else:
+#         print(f"The folder '{wavs_dir}' does not exist.")
+
+#     if os.path.exists(metadata_file):
+#         try:
+#             with open(metadata_file, "w") as file:
+#                 file.write("") 
+#             print(f"Cleared content of {metadata_file}")
+#         except Exception as e:
+#             print(f"Failed to clear {metadata_file}: {e}")
+#     else:
+#         print(f"The file '{metadata_file}' does not exist.")
 
 @app.post("/api/v1/datasets/validate_csv")
 async def validate():
