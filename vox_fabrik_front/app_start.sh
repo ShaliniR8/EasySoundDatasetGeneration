@@ -1,18 +1,25 @@
 #!/bin/bash
 
-iconv -f utf-16 -t utf-8 C:/ngrok/output.txt > C:/ngrok/output.log
+# # Start ngrok and redirect logs
+/mnt/c/ngrok/ngrok.exe start --all --log=stdout > /mnt/c/ngrok/output.txt &
 
-PYTHON_BACKEND_URL=$(grep "python-backend" C:/ngrok/output.log | sed -n 's/.*url=\(https:\/\/[^ ]*\).*/\1/p')
+echo "Wait.."
+sleep 5
+echo "Next.."
+
+# Extract URLs from the log
+PYTHON_BACKEND_URL=$(grep "python-backend" /mnt/c/ngrok/output.txt | sed -n 's/.*url=\(https:\/\/[^ ]*\).*/\1/p')
 REACT_APP_API_WEBSOCKET_URL=$(sed 's/^https:/wss:/' <<< "$PYTHON_BACKEND_URL")/ws
-NODEJS_BACKEND_URL=$(grep "nodejs-backend" C:/ngrok/output.log | sed -n 's/.*url=\(https:\/\/[^ ]*\).*/\1/p')
+NODEJS_BACKEND_URL=$(grep "nodejs-backend" /mnt/c/ngrok/output.txt | sed -n 's/.*url=\(https:\/\/[^ ]*\).*/\1/p')
 
+# Check if URLs were found
 if [ -z "$PYTHON_BACKEND_URL" ]; then
-  echo "Error: python-backend URL not found in output.log"
+  echo "Error: python-backend URL not found in output.txt"
   exit 1
 fi
 
 if [ -z "$NODEJS_BACKEND_URL" ]; then
-  echo "Error: nodejs-backend URL not found in output.log"
+  echo "Error: nodejs-backend URL not found in output.txt"
   exit 1
 fi
 

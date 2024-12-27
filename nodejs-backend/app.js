@@ -7,9 +7,23 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
+// // MONGODB
+// // TODO: User Registration and Login
+// const mongoose = require('mongoose');
+// const bodyParser = require('body-parser');
+// require('dotenv').config();
+
+// const authRoutes = require('./routes/auth');
+// app.use(bodyParser.json());
 const upload = multer({ dest: 'uploads/' });
 
 const PORT = 8080;
+
+// // TODO: User Registration and Login
+// mongoose
+//   .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+//   .then(() => console.log('MongoDB connected'))
+//   .catch((err) => console.error('MongoDB connection failed:', err));
 
 app.use(cors());
 app.use(express.json());
@@ -39,6 +53,8 @@ const mergeChunks = async (chunkFiles, mergedFilePath, uploadsDir) => {
     });
 };
 
+// // TODO: User Registration and Login
+// app.use('/api/v2/auth', authRoutes);
 
 app.post('/api/v2/datasets/upload-chunk', upload.single('chunk'), (req, res) => {
     const { fileName, chunkIndex } = req.body;

@@ -37,6 +37,10 @@ function App() {
           />
           {/* TTS Route */}
           <Route path="/tts" element={<TTS />} />
+          {/* TODO: User Registration and Login */}
+          {/* <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<Dashboard />} /> */}
         </Routes>
     </ThemeProvider>
   );

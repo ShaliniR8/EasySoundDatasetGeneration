@@ -29,3 +29,5 @@ output_*
 audio_code_tmp
 tmp_dataset_audio
 .tmp
+*.pem
+launch.json
