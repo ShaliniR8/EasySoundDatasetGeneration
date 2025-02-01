@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Box, Button, ButtonGroup, TextField, Typography, Grid, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, List,  IconButton } from '@mui/material';
-import PauseIcon from '@mui/icons-material/Pause';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { Box, Button, ButtonGroup, TextField, Typography, Grid, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton } from '@mui/material';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import AudiotrackIcon from '@mui/icons-material/Audiotrack';
 import AudioFileIcon from '@mui/icons-material/AudioFile';
@@ -11,6 +9,7 @@ import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
 import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js'
 import RightDrawer from './KeptAudios'
+import SpeechButtons from './SpeechButtons'
 import axios from 'axios';
 
 const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
@@ -24,16 +23,15 @@ const TTS = () => {
   const waveformRef = useRef(null);
   const timelineRef = useRef(null);
   const wavesurfer = useRef(null);
+  const websocketUrl = process.env.REACT_APP_API_WEBSOCKET_URL;
 
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [inputText, setInputText] = useState('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [keptTexts, setKeptTexts] = useState([]);
-
-  const handleOpenDialog = () => setIsDialogOpen(true);
-  const handleCloseDialog = () => setIsDialogOpen(false);
+  const [disablePitch, setDisabledPitch] = useState(false)
+  const [disableSpeed, setDisabledSpeed] = useState(false)
   const toggleDrawer = () => setIsDrawerOpen((prev) => !prev);
 
   useEffect(() => {
@@ -150,11 +148,169 @@ const TTS = () => {
     }
   };
 
-  const chopAudio = async () => {
-    handleCloseDialog();
+  const handleReset = async () => {
     try {
-      console.log(endTime)
       const response = await axios.post(
+        `${pythonBaseUrl}/api/v1/reset_audio`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': true,
+          },
+        }
+      );
+      console.log(response.data)
+      await refreshWaveform();
+    } catch (error) {
+      console.error('Error restoring audio', error);
+      alert('Error restoring audio.');
+    }
+  }
+  const increasePitch = async () => {
+    let ws_url = `${websocketUrl}/pitch`;
+    const socket = new WebSocket(ws_url);
+    socket.onopen = () => {
+      console.log("WebSocket connected to:", ws_url);
+      const params = {
+        pitch_factor: 0.5
+      };
+      socket.send(JSON.stringify(params));
+      setDisabledPitch(true)
+    };
+
+    socket.onerror = (event) => { console.error('WebSocket error:', event);
+        setDisabledPitch(false)
+      };
+    
+    socket.onmessage = (event) => {
+      console.log("Raw WebSocket Event:", event);
+      const data = JSON.parse(event.data);
+      console.log("Parsed message:", data);
+
+      if (data.type === "status") {
+          console.log("Status update:", data.message);
+          if (data.status === 'success') {
+            refreshWaveform()
+            setDisabledPitch(false)
+            return;
+          } else {
+            console.log('Error')
+            setDisabledPitch(false)
+            return;
+          }
+      }
+    };
+  }
+  const increaseSpeed = async () => {
+    let ws_url = `${websocketUrl}/speed`;
+    const socket = new WebSocket(ws_url);
+    socket.onopen = () => {
+      console.log("WebSocket connected to:", ws_url);
+      const params = {
+        speed_factor: 0.2
+      };
+      socket.send(JSON.stringify(params));
+      setDisabledSpeed(true)
+    };
+
+    socket.onerror = (event) => { console.error('WebSocket error:', event);
+        setDisabledSpeed(false)
+      };
+    
+    socket.onmessage = (event) => {
+      console.log("Raw WebSocket Event:", event);
+      const data = JSON.parse(event.data);
+      console.log("Parsed message:", data);
+
+      if (data.type === "status") {
+          console.log("Status update:", data.message);
+          if (data.status === 'success') {
+            refreshWaveform()
+            setDisabledSpeed(false)
+            return;
+          } else {
+            console.log('Error')
+            setDisabledSpeed(false)
+            return;
+          }
+      }
+    };
+  }
+  const decreasePitch = async () => {
+    let ws_url = `${websocketUrl}/pitch`;
+    const socket = new WebSocket(ws_url);
+    socket.onopen = () => {
+      console.log("WebSocket connected to:", ws_url);
+      const params = {
+        pitch_factor: -0.5
+      };
+      socket.send(JSON.stringify(params));
+      setDisabledPitch(true)
+    };
+
+    socket.onerror = (event) => { console.error('WebSocket error:', event);
+        setDisabledPitch(false)
+      };
+    
+    socket.onmessage = (event) => {
+      console.log("Raw WebSocket Event:", event);
+      const data = JSON.parse(event.data);
+      console.log("Parsed message:", data);
+
+      if (data.type === "status") {
+          console.log("Status update:", data.message);
+          if (data.status === 'success') {
+            refreshWaveform()
+            setDisabledPitch(false)
+            return;
+          } else {
+            console.log('Error')
+            setDisabledPitch(false)
+            return;
+          }
+      }
+    };
+  }
+
+  const decreaseSpeed = async () => {
+    let ws_url = `${websocketUrl}/speed`;
+    const socket = new WebSocket(ws_url);
+    socket.onopen = () => {
+      console.log("WebSocket connected to:", ws_url);
+      const params = {
+        speed_factor: -0.2
+      };
+      socket.send(JSON.stringify(params));
+      setDisabledSpeed(true)
+    };
+
+    socket.onerror = (event) => { console.error('WebSocket error:', event);
+        setDisabledSpeed(false)
+      };
+    
+    socket.onmessage = (event) => {
+      console.log("Raw WebSocket Event:", event);
+      const data = JSON.parse(event.data);
+      console.log("Parsed message:", data);
+
+      if (data.type === "status") {
+          console.log("Status update:", data.message);
+          if (data.status === 'success') {
+            refreshWaveform()
+            setDisabledSpeed(false)
+            return;
+          } else {
+            console.log('Error')
+            setDisabledSpeed(false)
+            return;
+          }
+      }
+    };
+  }
+
+  const chopAudio = async () => {
+    try {
+      await axios.post(
         `${pythonBaseUrl}/api/v1/chop`,
         { start: startTime, end: endTime },
         {
@@ -206,7 +362,7 @@ const TTS = () => {
     try {
       const response = await axios.post(
         `${pythonBaseUrl}/api/v1/keep`,
-        { text: inputText, model_name: folderName },
+        { text: inputText, name_of_model: folderName },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -281,47 +437,21 @@ const TTS = () => {
       ></Box>
       <Box ref={timelineRef} sx={{ mb: 4 }}></Box>
 
-      <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={8}>
-          <ButtonGroup fullWidth>
-            <Button
-                variant="contained"
-                color="primary"
-                startIcon={<PlayArrowIcon />}
-                onClick={playSubsection}
-              >
-                Play Subsection
-            </Button>
-            <Button
-              variant="contained"
-              sx={{
-                backgroundColor: "#78909c",
-                '&:hover': { backgroundColor: "#90a4ae"},
-              }}
-              startIcon={<PauseIcon />}
-              onClick={pausePlayback}
-            >
-              Pause
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<ContentCutIcon />}
-              onClick={handleOpenDialog}
-            >
-              Crop
-            </Button>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<AudioFileIcon />}
-              onClick={handleKeep}
-            >
-              Keep
-            </Button>
-          </ButtonGroup>
-        </Grid>
-      </Grid>
+      <SpeechButtons 
+        chopAudio={chopAudio}
+        playSubsection={playSubsection}
+        pausePlayback={pausePlayback}
+        increasePitch={increasePitch}
+        decreasePitch={decreasePitch}
+        increaseSpeed={increaseSpeed}
+        decreaseSpeed={decreaseSpeed}
+        handleKeep={handleKeep}
+        handleReset={handleReset}
+        disablePitch={disablePitch}
+        disableSpeed={disableSpeed}
+      />
+
+      <br/>
 
       <Grid container spacing={2} alignItems="center">
         <Grid item xs={12}>
@@ -346,22 +476,6 @@ const TTS = () => {
           </Button>
         </Grid>
       </Grid>
-      <Dialog open={isDialogOpen} onClose={handleCloseDialog}>
-        <DialogTitle>Confirm Audio Modification</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure? This audio will be modified, and you will not be able to recover the original audio.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} color="secondary">
-            Cancel
-          </Button>
-          <Button onClick={chopAudio} color="primary">
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* TODO: Need to handle when user reloads page with kept samples */}
       {/* <Dialog open={isUnloadDialogueOpen} onClose={handleCloseUnloadDialog}>

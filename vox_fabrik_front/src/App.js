@@ -31,7 +31,7 @@ function App() {
                 <Typography variant="body1">
                   {data ? data : 'Backend is not running.'}
                 </Typography>
-                {data && <HomePageButtons data={data} />}
+                { <HomePageButtons data={data} />}
               </Container>
             }
           />
@@ -42,6 +42,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} /> */}
         </Routes>
+
     </ThemeProvider>
   );
 }

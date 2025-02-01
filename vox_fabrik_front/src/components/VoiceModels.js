@@ -5,39 +5,16 @@ import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const nodeJSBaseUrl = process.env.REACT_APP_API_NODEJS_BASE_URL;
 const pythonBaseUrl = process.env.REACT_APP_API_PYTHON_BASE_URL;
 
-const VoiceModels = () => {
+const VoiceModels = ({folders}) => {
   const [modalOpen, setModalOpen] = useState(false);
-  const [folders, setFolders] = useState([]);
   const [loadingStage, setLoadingStage] = useState('idle');
 
   const navigate = useNavigate();
 
-  const fetchFolders = async () => {
-    setLoadingStage('fetchFolders'); 
-    try {
-      const { data } = await axios.get(`${nodeJSBaseUrl}/api/v2/models`, {
-        headers: { "ngrok-skip-browser-warning": true },
-      });
-      if (Array.isArray(data)) {
-        setFolders(data);
-      } else {
-        console.error('Unexpected API response format:', data);
-        setFolders([]);
-      }
-    } catch (error) {
-      console.error('Error fetching folders:', error);
-      setFolders([]);
-    } finally {
-      setLoadingStage('idle'); // Reset loading state
-    }
-  };
-
   const toggleModal = (isOpen) => {
     setModalOpen(isOpen);
-    if (isOpen) fetchFolders();
   };
 
   const handleOpenTTS = async (folderName) => {

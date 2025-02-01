@@ -4,7 +4,9 @@ const multer = require('multer');
 const unzipper = require('unzipper');
 const archiver = require('archiver');
 const fs = require('fs');
+const rimraf = require('rimraf')
 const path = require('path');
+const castedRoutes = require('./routes/incomplete_datasets');
 
 const app = express();
 // // MONGODB
@@ -85,6 +87,7 @@ app.post('/api/v2/datasets/validate', async (req, res) => {
     const extractPath = path.join(__dirname, '../', 'extracted');
 
     try {
+        fs.rmSync(extractPath, { recursive: true, force: true });
         const chunkFiles = fs.readdirSync(uploadsDir)
             .filter(file => file.includes('.chunk.'))
             .sort((a, b) => {
@@ -134,15 +137,12 @@ app.post('/api/v2/datasets/validate', async (req, res) => {
     }
 });
 
-
-
 app.get('/api/v2/models', (req, res) => {
     const modelsDir = path.join(__dirname, '../models');
 
     fs.readdir(modelsDir, { withFileTypes: true }, (err, files) => {
         if (err) {
-        console.error('Error reading models directory:', err);
-        return res.status(500).json({ error: 'Failed to fetch models' });
+        return res.json([]);
         }
 
         const folders = files
@@ -236,6 +236,8 @@ app.get('/api/v2/get_kept_samples', (req, res) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+app.use('/api/v2', castedRoutes);
 
 app.listen(PORT, () => {
     console.log(`Node.js server is running on http://localhost:${PORT}`);
